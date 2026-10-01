@@ -1,4 +1,4 @@
-from typing import ClassVar
+from typing import ClassVar, Literal
 from urllib.parse import urlsplit
 
 from maibot_sdk import Field, PluginConfigBase
@@ -39,7 +39,7 @@ class PluginSection(PluginConfigBase):
     __ui_label__: ClassVar[str] = "基础设置"
     __ui_order__: ClassVar[int] = 0
 
-    config_version: str = Field(default="1.0.0", description="配置结构版本，请勿手动修改")
+    config_version: str = Field(default="1.1.0", description="配置结构版本，请勿手动修改")
     enabled: bool = Field(default=True, description="是否启用网页截图插件")
 
 
@@ -52,9 +52,19 @@ class CommandsSection(PluginConfigBase):
         description="每行一组：特定指令 => 网页链接",
         json_schema_extra={
             "label": "指令列表（每行一组）",
-            "hint": "例如：/官网 => https://example.com\n指令按完整文本匹配；增删指令后请重新加载插件。",
+            "hint": "例如：/官网 => https://example.com\n默认包含匹配；增删指令或切换匹配方式后请重新加载插件。",
             "placeholder": "/官网 => https://example.com",
             "order": 0,
+        },
+    )
+
+    match_mode: Literal["contains", "exact"] = Field(
+        default="contains",
+        description="contains：包含匹配；exact：完整匹配",
+        json_schema_extra={
+            "label": "指令匹配方式",
+            "hint": "包含匹配：消息中出现指令即可触发；完整匹配：消息去除首尾空白后必须等于指令。切换后请重新加载插件。",
+            "order": 1,
         },
     )
 

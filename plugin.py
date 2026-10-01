@@ -15,17 +15,21 @@ class WebScreenshotPlugin(MaiBotPlugin):
         super().__init__()
         self._command_urls: dict[str, str] = {}
         self._registered_commands: frozenset[str] = frozenset()
+        self._registered_match_mode = ""
         self._capture_lock = asyncio.Lock()
 
     def get_components(self) -> list[dict[str, Any]]:
         self._command_urls = parse_mappings(self.config.commands.mappings)
         self._registered_commands = frozenset(self._command_urls)
+        self._registered_match_mode = self.config.commands.match_mode
         pattern = r"(?!)"
         if self.config.plugin.enabled and self._command_urls:
             alternatives = "|".join(
                 re.escape(command) for command in sorted(self._command_urls, key=len, reverse=True)
             )
-            pattern = rf"\A\s*(?P<command>{alternatives})\s*\Z"
+            pattern = rf"(?P<command>{alternatives})"
+            if self.config.commands.match_mode == "exact":
+                pattern = rf"\A\s*{pattern}\s*\Z"
         components = []
         for component in super().get_components():
             if component["name"] == "web_screenshot":
@@ -46,8 +50,11 @@ class WebScreenshotPlugin(MaiBotPlugin):
     async def on_config_update(self, scope: str, config_data: dict, version: str) -> None:
         if scope == CONFIG_RELOAD_SCOPE_SELF:
             self._command_urls = parse_mappings(self.config.commands.mappings)
-            if frozenset(self._command_urls) != self._registered_commands:
-                self.ctx.logger.warning("截图指令列表已变更，请重新加载插件以更新命令匹配规则")
+            if (
+                frozenset(self._command_urls) != self._registered_commands
+                or self.config.commands.match_mode != self._registered_match_mode
+            ):
+                self.ctx.logger.warning("截图指令列表或匹配方式已变更，请重新加载插件以更新命令匹配规则")
 
     @Command(
         "web_screenshot",
