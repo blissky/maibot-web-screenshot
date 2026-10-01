@@ -1,0 +1,12 @@
+/docs/
+/.venv/
+/.test-artifacts/
+/config.toml
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+.env
+.env.*
