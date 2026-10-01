@@ -1,0 +1,1 @@
+# maibot-web-screenshot
