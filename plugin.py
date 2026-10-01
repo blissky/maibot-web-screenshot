@@ -5,7 +5,7 @@ from typing import Any
 from maibot_sdk import CONFIG_RELOAD_SCOPE_SELF, Command, MaiBotPlugin
 
 from .config import WebScreenshotConfig, parse_mappings
-from .screenshot import build_navigation_html
+from .screenshot import ScreenshotError, capture_page
 
 
 class WebScreenshotPlugin(MaiBotPlugin):
@@ -79,23 +79,24 @@ class WebScreenshotPlugin(MaiBotPlugin):
         async with self._capture_lock:
             try:
                 async with asyncio.timeout(45):
-                    rendered = await self.ctx.call_capability(
-                        "render.html2png",
-                        timeout_ms=45000,
-                        html=build_navigation_html(url),
-                        selector="body",
-                        viewport={"width": 1280, "height": 720},
-                        device_scale_factor=1,
-                        full_page=True,
-                        wait_until="networkidle",
-                        wait_for_selector="body:not([data-maibot-web-screenshot-loading])",
-                        wait_for_timeout_ms=2000,
-                        render_timeout_ms=30000,
-                        allow_network=True,
+                    defaults = {
+                        "enabled": True,
+                        "browser_install_root": "data/playwright-browsers",
+                        "executable_path": "",
+                        "browser_ws_endpoint": "",
+                        "headless": True,
+                        "launch_args": [],
+                        "startup_timeout_sec": 20.0,
+                    }
+                    values = await asyncio.gather(
+                        *(
+                            self.ctx.config.get(f"plugin_runtime.render.{key}", default)
+                            for key, default in defaults.items()
+                        )
                     )
-                image_base64 = rendered.get("image_base64") if isinstance(rendered, dict) else None
+                    image_base64 = await capture_page(url, dict(zip(defaults, values)))
                 if not image_base64:
-                    raise RuntimeError("内置渲染器未返回图片数据")
+                    raise RuntimeError("浏览器未返回图片数据")
                 sent = await self.ctx.send.image(image_base64, stream_id)
                 if not sent:
                     await self.ctx.send.text("网页已截图，但图片发送失败，请检查聊天平台限制。", stream_id)
@@ -104,10 +105,14 @@ class WebScreenshotPlugin(MaiBotPlugin):
             except TimeoutError:
                 await self.ctx.send.text("网页加载或截图超时，未发送不完整截图，请稍后再试。", stream_id)
                 return False, "网页截图超时", 2
+            except ScreenshotError as error:
+                self.ctx.logger.warning("网页截图失败：%s", error)
+                await self.ctx.send.text(f"网页截图失败：{error}", stream_id)
+                return False, "网页截图失败", 2
             except Exception as error:
                 self.ctx.logger.error("网页截图失败（%s）", type(error).__name__)
                 await self.ctx.send.text(
-                    "网页截图失败，请检查链接是否可访问、MaiBot 浏览器渲染能力是否启用，以及 Chromium 是否已准备完成。",
+                    "网页截图失败，请检查链接是否可访问，以及 MaiBot 运行环境中的 Playwright 和 Chromium 是否已准备完成。",
                     stream_id,
                 )
                 return False, "网页截图失败", 2
